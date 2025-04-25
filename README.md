@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Simple PDF Signer ✍️
 
 A dead-simple, browser-based PDF signing tool.
@@ -20,3 +21,7 @@ A dead-simple, browser-based PDF signing tool.
 2. Open index.html in your browser.
 
 3. Upload a PDF, type your signature, place it, and save!
+=======
+# PDFSigner
+Self-hosted PDF signer. Created by Kyle Cain
+>>>>>>> 4f6518cf604f938bd2bcdf1192603e741249287f

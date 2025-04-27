@@ -357,23 +357,6 @@
             color: var(--dark-text);
         }
 
-        .signature-preview-floating {
-            position: absolute;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: var(--radius);
-            pointer-events: none;
-            z-index: 100;
-            font-size: 24px;
-            box-shadow: var(--shadow);
-            display: none;
-        }
-
-        body.dark-theme .signature-preview-floating {
-            background: rgba(30, 30, 30, 0.9);
-            color: var(--dark-text);
-        }
-
         body.dark-theme #pdf-canvas {
             border-color: var(--dark-border);
         }
@@ -382,8 +365,18 @@
             cursor: crosshair;
         }
 
+        /* Custom cursor element that will follow the mouse */
+        .cursor-stamp {
+            position: fixed;
+            pointer-events: none;
+            font-size: 24px;
+            z-index: 1000;
+            display: none;
+            transform: translate(-50%, -50%);
+        }
+
         .canvas-container.stamping-mode::after {
-            content: "Click to place signature";
+            content: "🖋️ Click to place signature";
             position: absolute;
             top: 10px;
             left: 50%;
@@ -395,6 +388,62 @@
             font-size: 0.9rem;
             font-weight: 600;
             box-shadow: var(--shadow);
+        }
+
+        .signature-placement-overlay {
+            position: absolute;
+            border: 2px dashed var(--primary);
+            background: rgba(66, 133, 244, 0.1);
+            cursor: move;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            flex-direction: column;
+        }
+
+        .signature-text {
+            display: block;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .resize-handle {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            background: var(--primary);
+            border-radius: 50%;
+            bottom: -7px;
+            right: -7px;
+            cursor: nwse-resize;
+        }
+
+        .confirm-signature-btn {
+            position: absolute;
+            top: -36px;
+            right: 0;
+            background: var(--success);
+            color: white;
+            border: none;
+            border-radius: var(--radius);
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .cancel-signature-btn {
+            position: absolute;
+            top: -36px;
+            right: 70px;
+            background: var(--danger);
+            color: white;
+            border: none;
+            border-radius: var(--radius);
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -477,11 +526,9 @@
                 <input type="text" id="signature-input" placeholder="Type your signature here"
                     aria-label="Signature text">
                 <select id="font-selector" aria-label="Font style">
-                    <option value="Pacifico" style="font-family: 'Pacifico'">Pacifico</option>
                     <option value="Dancing Script" style="font-family: 'Dancing Script'">Dancing Script</option>
                     <option value="Great Vibes" style="font-family: 'Great Vibes'">Great Vibes</option>
                     <option value="Satisfy" style="font-family: 'Satisfy'">Satisfy</option>
-                    <option value="Caveat" style="font-family: 'Caveat'">Caveat</option>
                     <option value="Homemade Apple" style="font-family: 'Homemade Apple'">Homemade Apple</option>
                     <option value="Sacramento" style="font-family: 'Sacramento'">Sacramento</option>
                     <option value="Allura" style="font-family: 'Allura'">Allura</option>
@@ -500,7 +547,7 @@
                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                     </svg>
-                    Apply Signature
+                    Create Signature
                 </button>
                 <button id="clear-btn" class="danger" disabled>
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -533,7 +580,7 @@
 
         <div class="canvas-container">
             <canvas id="pdf-canvas"></canvas>
-            <div class="signature-preview-floating" id="signature-preview-float"></div>
+            <div class="cursor-stamp" id="cursor-stamp">🖋️</div>
         </div>
     </div>
 
@@ -568,6 +615,48 @@
         let signatureCoords = {}; // { pageNumber: [{x, y, text, font}] }
         let isDocumentEncrypted = false;
         let scale = 1.5; // Default scale for rendering PDFs
+        let activePlacement = null;
+        let initialSize = {
+            width: 200,
+            height: 60
+        };
+        let isDragging = false;
+        let isResizing = false;
+        let dragOffset = {
+            x: 0,
+            y: 0
+        };
+        const defaultFont = 'Sacramento';
+        let pageViewports = {};
+
+        function loadGoogleFont(fontName) {
+            const formattedFontName = fontName.replace(/ /g, '+'); // Format for Google Fonts URL
+            const fontLink = document.createElement('link');
+            fontLink.href = `https://fonts.googleapis.com/css2?family=${formattedFontName}&display=swap`;
+            fontLink.rel = 'stylesheet';
+            document.head.appendChild(fontLink);
+        }
+        const fontScalingCache = {};
+
+        const fontsToLoad = [
+            'Dancing Script',
+            'Great Vibes',
+            'Satisfy',
+            'Homemade Apple',
+            'Sacramento',
+            'Allura',
+            'Tangerine',
+            'Petit Formal Script',
+            'Alex Brush',
+            'Pinyon Script',
+            'Bilbo Swash Caps'
+        ];
+
+        fontsToLoad.forEach(font => loadGoogleFont(font));
+        loadGoogleFont(defaultFont);
+        fontSelector.value = defaultFont;
+
+
 
         // Show status message
         function showStatus(message, duration = 3000) {
@@ -602,91 +691,51 @@
         // Load PDF file
         async function loadPdf(file) {
             try {
+                showStatus('Loading document...');
                 originalPdfBytes = new Uint8Array(await file.arrayBuffer());
 
-                // First attempt to load with PDF.js (for display)
+                // First load with PDF.js for display purposes
                 try {
                     const loadingTask = pdfjsLib.getDocument({
                         data: originalPdfBytes,
-                        password: '',
                         nativeImageDecoderSupport: 'display'
                     });
-
                     pdfDoc = await loadingTask.promise;
-                    isDocumentEncrypted = false;
+                    totalPages = pdfDoc.numPages;
+                    currentPage = 1;
                 } catch (e) {
-                    if (e.name === 'PasswordException') {
-                        isDocumentEncrypted = true;
-                        showStatus('Warning: Document appears to be encrypted. Will attempt to ignore encryption.',
-                            5000);
-
-                        // Retry with ignoreEncryption option
-                        const loadingTask = pdfjsLib.getDocument({
-                            data: originalPdfBytes,
-                            password: '',
-                            nativeImageDecoderSupport: 'display'
-                        });
-
-                        pdfDoc = await loadingTask.promise;
-                    } else {
-                        throw e;
-                    }
+                    console.error("PDF.js loading error:", e);
+                    showStatus('Error: Could not load the PDF for viewing.', 5000);
+                    return;
                 }
 
-                totalPages = pdfDoc.numPages;
-                currentPage = 1;
-
-                // Now load with PDF-Lib (for modification)
+                // Now load with PDF-Lib for modification
                 try {
-                    showStatus('Processing document...', 3000);
+                    // Create a new PDF document and copy pages from the original
+                    const pdfJsDoc = await PDFLib.PDFDocument.create();
 
-                    try {
-                        // First try normal loading
-                        pdfLibDoc = await PDFLib.PDFDocument.load(originalPdfBytes);
-                    } catch (e) {
-                        console.warn('Initial PDF-Lib load failed, trying with ignoreEncryption:', e);
-
-                        // If that fails, try with ignoreEncryption option
-                        pdfLibDoc = await PDFLib.PDFDocument.load(originalPdfBytes, {
-                            ignoreEncryption: true
+                    // For each page in the original document
+                    for (let i = 1; i <= totalPages; i++) {
+                        // Get page dimensions from PDF.js
+                        const page = await pdfDoc.getPage(i);
+                        const viewport = page.getViewport({
+                            scale: 1
                         });
+
+                        // Add a blank page with the same dimensions
+                        const newPage = pdfJsDoc.addPage([viewport.width, viewport.height]);
+
+                        // We'll add signatures to this blank page
                     }
 
-                    // If still failing, try creating a new document and copying pages
-                    if (!pdfLibDoc) {
-                        const tempDoc = await PDFLib.PDFDocument.create();
-                        const copiedPages = await tempDoc.copyPages(pdfLibDoc, pdfLibDoc.getPageIndices());
-                        pdfLibDoc = tempDoc;
-                        copiedPages.forEach(p => pdfLibDoc.addPage(p));
-                    }
-
+                    pdfLibDoc = pdfJsDoc;
                     renderPage(currentPage);
                     updateButtonStates(true);
-                    showStatus('PDF loaded successfully!');
+                    showStatus('Document prepared for signing', 3000);
                 } catch (e) {
                     console.error('Error with PDF-Lib:', e);
-                    // Try a last-resort approach for problematic PDFs
-                    try {
-                        // Create a blank document to at least allow signatures
-                        showStatus('PDF structure issue detected. Creating compatible version...', 5000);
-                        pdfLibDoc = await PDFLib.PDFDocument.create();
-
-                        // Create pages matching the display version dimensions
-                        for (let i = 1; i <= totalPages; i++) {
-                            const page = await pdfDoc.getPage(i);
-                            const viewport = page.getViewport({
-                                scale: 1
-                            });
-                            pdfLibDoc.addPage([viewport.width, viewport.height]);
-                        }
-
-                        renderPage(currentPage);
-                        updateButtonStates(true);
-                        showStatus('Created compatible document for signatures', 5000);
-                    } catch (err) {
-                        console.error('Fatal error with PDF:', err);
-                        showStatus('Error: This PDF cannot be processed for editing.', 5000);
-                    }
+                    showStatus('Error: Could not prepare the PDF for editing.', 5000);
+                    return;
                 }
             } catch (e) {
                 console.error('Error loading PDF:', e);
@@ -701,6 +750,7 @@
                 const viewport = page.getViewport({
                     scale
                 });
+                pageViewports[num] = viewport; // Cache the viewport dimensions for that page
 
                 pdfCanvas.width = viewport.width;
                 pdfCanvas.height = viewport.height;
@@ -724,26 +774,83 @@
             }
         }
 
+        function calculateFontScalingFactor(fontFamily) {
+            if (fontScalingCache[fontFamily]) {
+                return fontScalingCache[fontFamily];
+            }
+
+            const text = "Ag";
+            const fontSizePx = 100;
+
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = 300;
+            offCanvas.height = 150;
+            const ctx = offCanvas.getContext('2d');
+            ctx.font = `${fontSizePx}px '${fontFamily}'`;
+            ctx.textBaseline = 'top';
+            ctx.fillText(text, 0, 0);
+
+            const imageData = ctx.getImageData(0, 0, offCanvas.width, offCanvas.height);
+            let minY = offCanvas.height,
+                maxY = 0;
+
+            // Scan for non-transparent pixels
+            for (let y = 0; y < offCanvas.height; y++) {
+                for (let x = 0; x < offCanvas.width; x++) {
+                    const index = (y * offCanvas.width + x) * 4 + 3; // alpha channel
+                    if (imageData.data[index] > 0) {
+                        minY = Math.min(minY, y);
+                        maxY = Math.max(maxY, y);
+                    }
+                }
+            }
+
+            const renderedHeightPx = maxY - minY;
+            const scalingFactor = fontSizePx / renderedHeightPx;
+
+            fontScalingCache[fontFamily] = scalingFactor;
+            return scalingFactor;
+        }
+
+
+
+
         // Draw signatures on the current page
         function drawStamps() {
             // First redraw the page to clear previous signatures
             const page = pdfDoc.getPage(currentPage);
-            page.then(p => {
-                const viewport = p.getViewport({
-                    scale
-                });
-                return p.render({
+            const viewport = pageViewports[currentPage]; // Retrieve cached viewport
+            const coords = signatureCoords[currentPage] || [];
+            pdfDoc.getPage(currentPage).then(page => {
+                return page.render({
                     canvasContext: pdfCtx,
-                    viewport
+                    viewport: viewport
                 }).promise;
             }).then(() => {
-                // Then draw the signatures
-                const coords = signatureCoords[currentPage] || [];
                 coords.forEach(coord => {
-                    pdfCtx.font = `24px '${coord.font}'`;
+                    const scalingFactor = calculateFontScalingFactor(coord.font);
+
+                    const displayX = (coord.x / viewport.width) * pdfCanvas.width;
+                    const displayY = pdfCanvas.height - (coord.y / viewport.height) * pdfCanvas.height;
+
+                    const displayFontSize = (coord.size / viewport.height) * pdfCanvas.height;
+                    pdfCtx.font = `${displayFontSize}px '${coord.font}'`;
+
+                    // Add baseline correction (usually 80%-90% of font size)
+                    const baselineOffset = displayFontSize * 0.85;
+
                     pdfCtx.fillStyle = 'black';
-                    pdfCtx.fillText(coord.text, coord.x, coord.y);
+                    pdfCtx.fillText(coord.text, displayX, displayY + baselineOffset);
+
+
+                    // Optional debug box
+                    const textWidth = pdfCtx.measureText(coord.text).width;
+                    pdfCtx.strokeStyle = 'rgba(66, 133, 244, 0.5)';
+                    pdfCtx.lineWidth = 1;
+                    pdfCtx.strokeRect(displayX, displayY - displayFontSize, textWidth, displayFontSize *
+                        1.2);
                 });
+
             });
         }
 
@@ -771,34 +878,272 @@
             }
         });
 
-        pdfCanvas.addEventListener('click', e => {
-            if (!pdfDoc) return;
-
-            const rect = pdfCanvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
-            if (!signatureCoords[currentPage]) signatureCoords[currentPage] = [];
-
-            const signatureText = signatureInput.value.trim() || 'Signature';
-            signatureCoords[currentPage].push({
-                x,
-                y,
-                text: signatureText,
-                font: fontSelector.value
-            });
-
-            drawStamps();
-            showStatus('Signature placed!');
+        fontSelector.addEventListener('change', (e) => {
+            const selectedFont = e.target.value;
+            loadGoogleFont(selectedFont); // Dynamically load the selected font
+            updateSignaturePreview(); // Update the preview with the new font
         });
+
+
+        const signaturePreviewFloat = document.getElementById('signature-preview-float');
+        const cursorStamp = document.getElementById('cursor-stamp');
+
+        // Track mouse position for stamp cursor
+        document.addEventListener('mousemove', (e) => {
+            // Update stamp cursor position when in stamping mode
+            if (isStampingMode) {
+                cursorStamp.style.left = `${e.clientX}px`;
+                cursorStamp.style.top = `${e.clientY}px`;
+                cursorStamp.style.display = 'block';
+            } else {
+                cursorStamp.style.display = 'none';
+            }
+        });
+
+        let isStampingMode = false;
+        const canvasContainer = document.querySelector('.canvas-container');
 
         stampBtn.addEventListener('click', () => {
             if (!signatureInput.value.trim()) {
                 showStatus('Please enter your signature text first');
                 return;
             }
-            showStatus('Click on the document to place your signature');
+
+            isStampingMode = !isStampingMode;
+            if (isStampingMode) {
+                canvasContainer.classList.add('stamping-mode');
+                cursorStamp.style.display = 'block';
+                stampBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    Cancel Signature
+                `;
+                showStatus('🖋️ Click on the document to place your signature');
+            } else {
+                cursorStamp.style.display = 'none';
+                canvasContainer.classList.remove('stamping-mode');
+                stampBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            Apply Signature
+        `;
+
+                // Clean up any active placement
+                if (activePlacement) {
+                    document.querySelector('.canvas-container').removeChild(activePlacement);
+                    activePlacement = null;
+                }
+            }
         });
+
+        pdfCanvas.addEventListener('click', e => {
+            if (!pdfDoc || !isStampingMode || activePlacement) return;
+
+            const rect = pdfCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // Create a placement overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'signature-placement-overlay';
+
+            // Position exactly where clicked - no offsets
+            overlay.style.left = `${x}px`;
+            overlay.style.top = `${y}px`;
+            overlay.style.transform = 'none';
+
+            overlay.style.width = `${initialSize.width}px`;
+            overlay.style.height = `${initialSize.height}px`;
+            overlay.style.fontSize = '24px';
+            overlay.style.fontFamily = fontSelector.value;
+
+            // Create a span for the signature text only
+            const signatureSpan = document.createElement('span');
+            signatureSpan.className = 'signature-text';
+            signatureSpan.textContent = signatureInput.value.trim() || 'Signature';
+            signatureSpan.style.pointerEvents = 'none'; // Prevent interference with dragging
+            // After appending signatureSpan to overlay
+            overlay.appendChild(signatureSpan);
+
+            // Delay font size adjustment until the DOM updates
+            requestAnimationFrame(() => {
+                const overlayHeightPx = overlay.offsetHeight;
+                const scalingFactor = calculateFontScalingFactor(fontSelector.value);
+                const fontSize = overlayHeightPx / scalingFactor;
+
+                overlay.style.fontSize = `${fontSize * scalingFactor}px`;
+                signatureSpan.style.fontSize = `${fontSize * scalingFactor}px`;
+            });
+
+
+            // Apply dynamic font size based on overlay height
+            const overlayHeightPx = overlay.offsetHeight;
+            const scalingFactor = calculateFontScalingFactor(fontSelector.value);
+            const fontSize = overlayHeightPx / scalingFactor;
+
+            overlay.style.fontSize = `${fontSize * scalingFactor}px`;
+            signatureSpan.style.fontSize = `${fontSize * scalingFactor}px`;
+
+            // Add resize handle
+            const resizeHandle = document.createElement('div');
+            resizeHandle.className = 'resize-handle';
+            overlay.appendChild(resizeHandle);
+
+            // Add confirm button
+            const confirmBtn = document.createElement('button');
+            confirmBtn.className = 'confirm-signature-btn';
+            confirmBtn.textContent = 'Place';
+            confirmBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+
+                const overlayRect = overlay.getBoundingClientRect();
+                const canvasRect = pdfCanvas.getBoundingClientRect();
+
+                // Calculate exact position relative to the canvas
+                const viewport = pageViewports[currentPage]; // Get the correct viewport
+
+                const overlayHeight = overlayRect.height;
+                const canvasHeight = canvasRect.height;
+
+                if (!signatureCoords[currentPage]) signatureCoords[currentPage] = [];
+                // Calculate PDF coordinates
+                const relativeX = overlayRect.left - canvasRect.left;
+                const relativeY = overlayRect.top - canvasRect.top;
+
+                const pdfX = (relativeX / canvasRect.width) * viewport.width;
+                const pdfY = viewport.height - ((relativeY / canvasRect.height) * viewport.height);
+
+                const signatureText = signatureSpan.textContent;
+
+                // Calculate font size for PDF
+                const overlayHeightPx = overlayRect.height;
+                const pdfFontSize = (overlayHeightPx / canvasRect.height) * viewport.height;
+
+                signatureCoords[currentPage].push({
+                    x: pdfX,
+                    y: pdfY,
+                    text: signatureText,
+                    font: fontSelector.value,
+                    size: pdfFontSize
+                });
+
+
+                document.querySelector('.canvas-container').removeChild(overlay);
+                activePlacement = null;
+                drawStamps();
+                showStatus('Signature placed!');
+            });
+
+            overlay.appendChild(confirmBtn);
+
+            // Add cancel button
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'cancel-signature-btn';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                document.querySelector('.canvas-container').removeChild(overlay);
+                activePlacement = null;
+            });
+            overlay.appendChild(cancelBtn);
+
+            // Add event listeners for dragging
+            overlay.addEventListener('mousedown', startDrag);
+            resizeHandle.addEventListener('mousedown', startResize);
+
+            // Add to canvas container
+            document.querySelector('.canvas-container').appendChild(overlay);
+            activePlacement = overlay;
+        });
+
+        function startDrag(e) {
+            if (e.target !== this) return;
+
+            e.preventDefault();
+
+            const overlay = activePlacement;
+            const rect = overlay.getBoundingClientRect();
+
+            isDragging = true;
+            isResizing = false;
+            dragOffset.x = e.clientX - rect.left;
+            dragOffset.y = e.clientY - rect.top;
+
+            document.addEventListener('mousemove', handleDrag);
+            document.addEventListener('mouseup', stopDrag);
+        }
+
+        function handleDrag(e) {
+            if (!isDragging || !activePlacement) return;
+
+            const overlay = activePlacement;
+            const canvasRect = pdfCanvas.getBoundingClientRect();
+
+            const left = e.clientX - dragOffset.x;
+            const top = e.clientY - dragOffset.y;
+
+            // Constrain to canvas
+            // Get overlay dimensions
+            const overlayWidth = overlay.offsetWidth;
+            const overlayHeight = overlay.offsetHeight;
+
+            // Calculate constrained position without transform
+            const constrainedLeft = Math.max(canvasRect.left,
+                Math.min(canvasRect.right - overlayWidth, left));
+            const constrainedTop = Math.max(canvasRect.top,
+                Math.min(canvasRect.bottom - overlayHeight, top));
+
+            // Position relative to the canvas without any offsets
+            overlay.style.left = `${constrainedLeft - canvasRect.left}px`;
+            overlay.style.top = `${constrainedTop - canvasRect.top}px`;
+        }
+
+        function stopDrag() {
+            isDragging = false;
+            isResizing = false;
+            document.removeEventListener('mousemove', handleDrag);
+            document.removeEventListener('mousemove', handleResize);
+            document.removeEventListener('mouseup', stopDrag);
+        }
+
+        function startResize(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            isResizing = true;
+            isDragging = false;
+
+            document.addEventListener('mousemove', handleResize);
+            document.addEventListener('mouseup', stopDrag);
+        }
+
+        function handleResize(e) {
+            if (!isResizing || !activePlacement) return;
+
+            const overlay = activePlacement;
+            const rect = overlay.getBoundingClientRect();
+            const width = Math.max(50, e.clientX - rect.left);
+            const height = Math.max(30, e.clientY - rect.top);
+
+            overlay.style.width = `${width}px`;
+            overlay.style.height = `${height}px`;
+
+            // Set font size as a percentage of height
+            const scalingFactor = calculateFontScalingFactor(fontSelector.value);
+            const fontSize = height / scalingFactor; // PDF font size equivalent
+            overlay.style.fontSize = `${fontSize * scalingFactor}px`; // For visual preview
+
+            const signatureSpan = overlay.querySelector('.signature-text');
+            if (signatureSpan) {
+                signatureSpan.style.fontSize = `${fontSize * scalingFactor}px`;
+            }
+        }
+
 
         clearBtn.addEventListener('click', () => {
             if (signatureCoords[currentPage] && signatureCoords[currentPage].length > 0) {
@@ -810,85 +1155,188 @@
             }
         });
 
+        async function getFontData(fontName) {
+            try {
+                // Cache for fonts we've already loaded
+                if (!window.fontCache) {
+                    window.fontCache = {};
+                }
+
+                // Return cached font data if available
+                if (window.fontCache[fontName]) {
+                    return window.fontCache[fontName];
+                }
+
+                // Create a mapping of font names to URLs (using .ttf format which works better with PDF-Lib)
+                const fontUrls = {
+                    'Dancing Script': 'https://fonts.gstatic.com/s/dancingscript/v24/If2cXTr6YS-zF4S-kcSWSVi_sxjsohD9F50Ruu7BMSo3ROp6.ttf',
+                    'Great Vibes': 'https://fonts.gstatic.com/s/greatvibes/v14/RWmMoKWR9v4ksMfaWd_JN9XLiaQ.ttf',
+                    'Satisfy': 'https://fonts.gstatic.com/s/satisfy/v17/rP2Hp2yn6lkG50LoCZOIHTc.ttf',
+                    'Caveat': 'https://fonts.gstatic.com/s/caveat/v17/WnznHAc5bAfYB2QRah7pcpNvOx-pjfJ9eIWpZA.ttf',
+                    'Homemade Apple': 'https://fonts.gstatic.com/s/homemadeapple/v18/Qw3EZQFXECDrI2q789EKQZJob0x6XHgOCS7_.ttf',
+                    'Sacramento': 'https://fonts.gstatic.com/s/sacramento/v13/buEzpo6gcdjy0EiZMBUG4CMf_exL.ttf',
+                    'Allura': 'https://fonts.gstatic.com/s/allura/v18/9oRPNYsQpS4zjuA_hAgWDto.ttf',
+                    'Tangerine': 'https://fonts.gstatic.com/s/tangerine/v17/IurY6Y5j_oScZZow4VOxCZZMprNA.ttf',
+                    'Petit Formal Script': 'https://fonts.gstatic.com/s/petitformalscript/v14/B50TF6xQr2TXJBnGOFME6u5OR83oRP5qkHx8Kp8.ttf',
+                    'Alex Brush': 'https://fonts.gstatic.com/s/alexbrush/v20/SZc83FzrJKuqFbwMKk6EhUvz7Q.ttf',
+                    'Pinyon Script': 'https://fonts.gstatic.com/s/pinyonscript/v17/6xKpdSJbL9-e9LuoeQiDRQR8WOXaOg.ttf',
+                    'Bilbo Swash Caps': 'https://fonts.gstatic.com/s/bilboswashcaps/v22/zrf-0GXbz-H3Wb4XBsGrTgq2PVmdqANJ.ttf'
+                };
+
+                // Get the font URL - use TTF format for better compatibility with PDF-Lib
+                const fontUrl = fontUrls[fontName] || fontUrls['Pacifico']; // Default to Pacifico if not found
+
+                console.log(`Loading font: ${fontName} from URL: ${fontUrl}`);
+
+                // Fetch the font file
+                const response = await fetch(fontUrl);
+
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch font: ${response.status} ${response.statusText}`);
+                }
+
+                const fontBytes = await response.arrayBuffer();
+
+                // Return the font data
+                // Cache the font data
+                const fontData = new Uint8Array(fontBytes);
+                window.fontCache[fontName] = fontData;
+
+                // Return the font data
+                return fontData;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function showLoading(message) {
+            statusMessage.textContent = message;
+            statusMessage.classList.add('show');
+            // Add a little animation to indicate loading
+            let dots = 0;
+            const loadingInterval = setInterval(() => {
+                dots = (dots + 1) % 4;
+                statusMessage.textContent = message + '.'.repeat(dots);
+            }, 500);
+            return () => {
+                clearInterval(loadingInterval);
+                statusMessage.classList.remove('show');
+            };
+        }
+
+        // Replace the saveBtn event listener with this version
         saveBtn.addEventListener('click', async () => {
-            if (!pdfLibDoc) {
+            if (!pdfDoc || !pdfLibDoc) {
                 showStatus('No document loaded');
                 return;
             }
 
+            const hideLoading = showLoading('Creating signed PDF');
+
             try {
-                showStatus('Processing PDF...');
+                // Create a new PDF document for the output
+                const outputPdf = await PDFLib.PDFDocument.create();
 
-                // Process each page with signatures
-                for (const pageNum of Object.keys(signatureCoords)) {
-                    const pageIdx = Number(pageNum) - 1;
-                    if (pageIdx < 0 || pageIdx >= pdfLibDoc.getPageCount()) continue;
-
-                    const page = pdfLibDoc.getPage(pageIdx);
-                    const {
-                        width,
-                        height
-                    } = page.getSize();
-                    const signatures = signatureCoords[pageNum] || [];
-
-                    // Calculate scale factors
-                    const renderedPage = await pdfDoc.getPage(Number(pageNum));
-                    const viewport = renderedPage.getViewport({
-                        scale
+                // For each page in the document
+                for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                    // Get page dimensions from PDF.js
+                    const jsPage = await pdfDoc.getPage(pageNum);
+                    const viewport = jsPage.getViewport({
+                        scale: 1
                     });
-                    const scaleX = width / viewport.width;
-                    const scaleY = height / viewport.height;
 
-                    // Process each signature on this page
-                    for (const sig of signatures) {
-                        try {
-                            // Try to embed the custom font (if available in PDF-Lib)
-                            let font;
+                    // Render the page to a canvas at high quality
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    const renderScale = 2; // Higher resolution
+
+                    canvas.width = viewport.width * renderScale;
+                    canvas.height = viewport.height * renderScale;
+
+                    console.log('PDF page dimensions:', {
+                        width: viewport.width,
+                        height: viewport.height,
+                        scale: scale,
+                        renderScale: renderScale
+                    });
+
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: jsPage.getViewport({
+                            scale: renderScale
+                        })
+                    };
+
+                    await jsPage.render(renderContext).promise;
+
+                    // Get the canvas as an image
+                    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                    const imgBytes = await fetch(imgData).then(res => res.arrayBuffer());
+
+                    // Embed the image in the new PDF
+                    const image = await outputPdf.embedJpg(imgBytes);
+
+                    // Add a page with the same dimensions
+                    const page = outputPdf.addPage([viewport.width, viewport.height]);
+
+                    // Draw the page image
+                    page.drawImage(image, {
+                        x: 0,
+                        y: 0,
+                        width: viewport.width,
+                        height: viewport.height
+                    });
+
+                    // Add signatures if there are any for this page
+                    if (signatureCoords[pageNum]) {
+                        for (const sig of signatureCoords[pageNum]) {
                             try {
-                                // First try to use a custom font that approximates the display font
-                                // This is a simplified approach - in reality you'd need to map each font
-                                // to its closest equivalent in PDF-Lib's standard fonts
-                                switch (sig.font) {
-                                    case 'Pacifico':
-                                    case 'Dancing Script':
-                                    case 'Great Vibes':
-                                    case 'Satisfy':
-                                    case 'Caveat':
-                                    case 'Homemade Apple':
-                                    case 'Sacramento':
-                                    case 'Allura':
-                                    case 'Tangerine':
-                                    case 'Petit Formal Script':
-                                    case 'Alex Brush':
-                                    case 'Pinyon Script':
-                                    case 'Bilbo Swash Caps':
-                                        font = await pdfLibDoc.embedFont(PDFLib.StandardFonts
-                                            .TimesRomanItalic);
-                                        break;
-                                    default:
-                                        font = await pdfLibDoc.embedFont(PDFLib.StandardFonts.Helvetica);
-                                }
-                            } catch (e) {
-                                // Fallback to Helvetica
-                                font = await pdfLibDoc.embedFont(PDFLib.StandardFonts.Helvetica);
-                            }
+                                let fontFamily = sig.font || 'Helvetica';
+                                let font;
 
-                            // Draw the text
-                            page.drawText(sig.text, {
-                                x: sig.x * scaleX,
-                                y: height - (sig.y * scaleY), // PDF coordinate system is bottom-up
-                                size: 24 * scaleY, // Scale the font size too
-                                font,
-                                color: PDFLib.rgb(0, 0, 0)
-                            });
-                        } catch (e) {
-                            console.error('Error adding signature to page:', e);
+                                // Load and embed the custom font
+                                try {
+                                    // Get the font data from the function we already have
+                                    const fontData = await getFontData(fontFamily);
+                                    if (fontData) {
+                                        // Embed the custom font
+                                        font = await outputPdf.embedFont(fontData);
+                                    } else {
+                                        // Fallback if font data couldn't be loaded
+                                        console.warn(
+                                            `Couldn't load font: ${fontFamily}, falling back to Helvetica`
+                                        );
+                                        font = await outputPdf.embedFont(PDFLib.StandardFonts.Helvetica);
+                                    }
+                                } catch (e) {
+                                    console.error('Error embedding font:', e);
+                                    font = await outputPdf.embedFont(PDFLib.StandardFonts.Helvetica);
+                                }
+
+                                // Draw the signature text
+                                console.log('Drawing signature at PDF coordinates:', {
+                                    originalX: sig.x,
+                                    originalY: sig.y,
+                                    viewportHeight: viewport.height,
+                                    convertedY: viewport.height - sig.y
+                                });
+                                page.drawText(sig.text, {
+                                    x: sig.x,
+                                    y: sig.y,
+                                    size: sig.size,
+                                    font,
+                                    color: PDFLib.rgb(0, 0, 0)
+                                });
+
+                            } catch (e) {
+                                console.error('Error adding signature:', e);
+                            }
                         }
                     }
                 }
 
                 // Save the PDF
-                const pdfBytes = await pdfLibDoc.save();
+                const pdfBytes = await outputPdf.save();
                 const blob = new Blob([pdfBytes], {
                     type: 'application/pdf'
                 });
@@ -897,8 +1345,10 @@
                 link.download = 'signed_document.pdf';
                 link.click();
 
+                hideLoading();
                 showStatus('PDF saved successfully!');
             } catch (e) {
+                hideLoading();
                 console.error('Error saving PDF:', e);
                 showStatus('Error: Could not save the PDF. ' + e.message, 5000);
             }

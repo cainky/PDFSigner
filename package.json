@@ -1,0 +1,25 @@
+{
+  "name": "pdfsigner",
+  "version": "1.0.0",
+  "description": "A dead-simple, browser-based PDF signing tool.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js",
+    "serve": "python -m http.server 8765"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cainky/PDFSigner.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/cainky/PDFSigner/issues"
+  },
+  "homepage": "https://github.com/cainky/PDFSigner#readme",
+  "devDependencies": {
+    "pdf-lib": "^1.17.1",
+    "puppeteer": "^24.34.0"
+  }
+}

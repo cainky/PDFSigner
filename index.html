@@ -399,12 +399,11 @@
             align-items: center;
             justify-content: center;
             z-index: 100;
-            flex-direction: column;
         }
 
         .signature-text {
             display: block;
-            width: 100%;
+            white-space: nowrap;
             text-align: center;
             pointer-events: none;
         }
@@ -547,7 +546,7 @@
                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                     </svg>
-                    Create Signature
+                    Place Signature
                 </button>
                 <button id="clear-btn" class="danger" disabled>
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -669,10 +668,13 @@
 
         // Enable/disable buttons based on document state
         function updateButtonStates(documentLoaded = false) {
-            const buttons = [stampBtn, clearBtn, saveBtn, prevPageBtn, nextPageBtn];
+            const buttons = [clearBtn, saveBtn, prevPageBtn, nextPageBtn];
             buttons.forEach(btn => {
                 btn.disabled = !documentLoaded;
             });
+
+            // Stamp button requires both PDF loaded AND signature text entered
+            stampBtn.disabled = !documentLoaded || !signatureInput.value.trim();
 
             // Special case for navigation buttons
             if (documentLoaded) {
@@ -763,7 +765,7 @@
                 pageInfo.textContent = `Page ${num} of ${totalPages}`;
 
                 // Draw any existing signatures on this page
-                drawStamps();
+                await drawStamps();
 
                 // Update navigation buttons
                 prevPageBtn.disabled = num <= 1;
@@ -816,46 +818,49 @@
 
 
         // Draw signatures on the current page
-        function drawStamps() {
-            // First redraw the page to clear previous signatures
-            const page = pdfDoc.getPage(currentPage);
-            const viewport = pageViewports[currentPage]; // Retrieve cached viewport
+        async function drawStamps() {
+            const viewport = pageViewports[currentPage];
             const coords = signatureCoords[currentPage] || [];
-            pdfDoc.getPage(currentPage).then(page => {
-                return page.render({
-                    canvasContext: pdfCtx,
-                    viewport: viewport
-                }).promise;
-            }).then(() => {
-                coords.forEach(coord => {
-                    const scalingFactor = calculateFontScalingFactor(coord.font);
 
-                    const displayX = (coord.x / viewport.width) * pdfCanvas.width;
-                    const displayY = pdfCanvas.height - (coord.y / viewport.height) * pdfCanvas.height;
+            // Redraw the page to clear previous signatures
+            const page = await pdfDoc.getPage(currentPage);
+            await page.render({
+                canvasContext: pdfCtx,
+                viewport: viewport
+            }).promise;
 
-                    const displayFontSize = (coord.size / viewport.height) * pdfCanvas.height;
-                    pdfCtx.font = `${displayFontSize}px '${coord.font}'`;
+            // Get unscaled PDF dimensions for coordinate conversion
+            const pdfWidth = viewport.width / scale;
+            const pdfHeight = viewport.height / scale;
 
-                    // Add baseline correction (usually 80%-90% of font size)
-                    const baselineOffset = displayFontSize * 0.85;
+            // Draw each signature centered at stored coordinates
+            coords.forEach(coord => {
+                // Convert from unscaled PDF coords to canvas display coords
+                const displayX = (coord.x / pdfWidth) * pdfCanvas.width;
+                const displayY = pdfCanvas.height - (coord.y / pdfHeight) * pdfCanvas.height;
 
-                    pdfCtx.fillStyle = 'black';
-                    pdfCtx.fillText(coord.text, displayX, displayY + baselineOffset);
+                const displayFontSize = (coord.size / pdfHeight) * pdfCanvas.height;
+                pdfCtx.font = `${displayFontSize}px '${coord.font}'`;
 
+                // Measure text width for centering
+                const textMetrics = pdfCtx.measureText(coord.text);
+                const textWidth = textMetrics.width;
 
-                    // Optional debug box
-                    const textWidth = pdfCtx.measureText(coord.text).width;
-                    pdfCtx.strokeStyle = 'rgba(66, 133, 244, 0.5)';
-                    pdfCtx.lineWidth = 1;
-                    pdfCtx.strokeRect(displayX, displayY - displayFontSize, textWidth, displayFontSize *
-                        1.2);
-                });
-
+                // Draw centered (coordinates are center point)
+                pdfCtx.fillStyle = 'black';
+                pdfCtx.textBaseline = 'middle';
+                pdfCtx.fillText(coord.text, displayX - textWidth / 2, displayY);
             });
         }
 
         // Event Listeners
-        signatureInput.addEventListener('input', updateSignaturePreview);
+        signatureInput.addEventListener('input', () => {
+            updateSignaturePreview();
+            // Update stamp button state when signature text changes
+            if (pdfDoc) {
+                stampBtn.disabled = !signatureInput.value.trim();
+            }
+        });
         fontSelector.addEventListener('change', updateSignaturePreview);
 
         fileInput.addEventListener('change', async e => {
@@ -884,8 +889,6 @@
             updateSignaturePreview(); // Update the preview with the new font
         });
 
-
-        const signaturePreviewFloat = document.getElementById('signature-preview-float');
         const cursorStamp = document.getElementById('cursor-stamp');
 
         // Track mouse position for stamp cursor
@@ -930,7 +933,7 @@
                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
             </svg>
-            Apply Signature
+            Place Signature
         `;
 
                 // Clean up any active placement
@@ -944,9 +947,15 @@
         pdfCanvas.addEventListener('click', e => {
             if (!pdfDoc || !isStampingMode || activePlacement) return;
 
-            const rect = pdfCanvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const canvasRect = pdfCanvas.getBoundingClientRect();
+            const containerRect = canvasContainer.getBoundingClientRect();
+
+            // Account for canvas offset within container (due to centering)
+            const canvasOffsetX = canvasRect.left - containerRect.left;
+            const canvasOffsetY = canvasRect.top - containerRect.top;
+
+            const x = canvasOffsetX + (e.clientX - canvasRect.left);
+            const y = canvasOffsetY + (e.clientY - canvasRect.top);
 
             // Create a placement overlay
             const overlay = document.createElement('div');
@@ -980,15 +989,6 @@
                 signatureSpan.style.fontSize = `${fontSize * scalingFactor}px`;
             });
 
-
-            // Apply dynamic font size based on overlay height
-            const overlayHeightPx = overlay.offsetHeight;
-            const scalingFactor = calculateFontScalingFactor(fontSelector.value);
-            const fontSize = overlayHeightPx / scalingFactor;
-
-            overlay.style.fontSize = `${fontSize * scalingFactor}px`;
-            signatureSpan.style.fontSize = `${fontSize * scalingFactor}px`;
-
             // Add resize handle
             const resizeHandle = document.createElement('div');
             resizeHandle.className = 'resize-handle';
@@ -998,31 +998,30 @@
             const confirmBtn = document.createElement('button');
             confirmBtn.className = 'confirm-signature-btn';
             confirmBtn.textContent = 'Place';
-            confirmBtn.addEventListener('click', (e) => {
+            confirmBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
 
                 const overlayRect = overlay.getBoundingClientRect();
                 const canvasRect = pdfCanvas.getBoundingClientRect();
 
                 // Calculate exact position relative to the canvas
-                const viewport = pageViewports[currentPage]; // Get the correct viewport
-
-                const overlayHeight = overlayRect.height;
-                const canvasHeight = canvasRect.height;
+                const viewport = pageViewports[currentPage];
 
                 if (!signatureCoords[currentPage]) signatureCoords[currentPage] = [];
-                // Calculate PDF coordinates
-                const relativeX = overlayRect.left - canvasRect.left;
-                const relativeY = overlayRect.top - canvasRect.top;
 
-                const pdfX = (relativeX / canvasRect.width) * viewport.width;
-                const pdfY = viewport.height - ((relativeY / canvasRect.height) * viewport.height);
+                // Calculate CENTER of overlay (where the signature text visually appears)
+                const centerX = overlayRect.left + overlayRect.width / 2 - canvasRect.left;
+                const centerY = overlayRect.top + overlayRect.height / 2 - canvasRect.top;
+
+                // Convert to PDF coordinates (unscaled)
+                const pdfX = (centerX / canvasRect.width) * (viewport.width / scale);
+                const pdfY = (viewport.height / scale) - ((centerY / canvasRect.height) * (viewport.height / scale));
 
                 const signatureText = signatureSpan.textContent;
 
-                // Calculate font size for PDF
+                // Calculate font size for PDF (unscaled)
                 const overlayHeightPx = overlayRect.height;
-                const pdfFontSize = (overlayHeightPx / canvasRect.height) * viewport.height;
+                const pdfFontSize = (overlayHeightPx / canvasRect.height) * (viewport.height / scale);
 
                 signatureCoords[currentPage].push({
                     x: pdfX,
@@ -1032,10 +1031,9 @@
                     size: pdfFontSize
                 });
 
-
                 document.querySelector('.canvas-container').removeChild(overlay);
                 activePlacement = null;
-                drawStamps();
+                await drawStamps();
                 showStatus('Signature placed!');
             });
 
@@ -1164,47 +1162,54 @@
 
                 // Return cached font data if available
                 if (window.fontCache[fontName]) {
+                    console.log(`Font ${fontName} found in cache`);
                     return window.fontCache[fontName];
                 }
 
                 // Create a mapping of font names to URLs (using .ttf format which works better with PDF-Lib)
+                // Updated URLs from Google Fonts API
                 const fontUrls = {
-                    'Dancing Script': 'https://fonts.gstatic.com/s/dancingscript/v24/If2cXTr6YS-zF4S-kcSWSVi_sxjsohD9F50Ruu7BMSo3ROp6.ttf',
-                    'Great Vibes': 'https://fonts.gstatic.com/s/greatvibes/v14/RWmMoKWR9v4ksMfaWd_JN9XLiaQ.ttf',
-                    'Satisfy': 'https://fonts.gstatic.com/s/satisfy/v17/rP2Hp2yn6lkG50LoCZOIHTc.ttf',
-                    'Caveat': 'https://fonts.gstatic.com/s/caveat/v17/WnznHAc5bAfYB2QRah7pcpNvOx-pjfJ9eIWpZA.ttf',
-                    'Homemade Apple': 'https://fonts.gstatic.com/s/homemadeapple/v18/Qw3EZQFXECDrI2q789EKQZJob0x6XHgOCS7_.ttf',
-                    'Sacramento': 'https://fonts.gstatic.com/s/sacramento/v13/buEzpo6gcdjy0EiZMBUG4CMf_exL.ttf',
-                    'Allura': 'https://fonts.gstatic.com/s/allura/v18/9oRPNYsQpS4zjuA_hAgWDto.ttf',
-                    'Tangerine': 'https://fonts.gstatic.com/s/tangerine/v17/IurY6Y5j_oScZZow4VOxCZZMprNA.ttf',
-                    'Petit Formal Script': 'https://fonts.gstatic.com/s/petitformalscript/v14/B50TF6xQr2TXJBnGOFME6u5OR83oRP5qkHx8Kp8.ttf',
-                    'Alex Brush': 'https://fonts.gstatic.com/s/alexbrush/v20/SZc83FzrJKuqFbwMKk6EhUvz7Q.ttf',
-                    'Pinyon Script': 'https://fonts.gstatic.com/s/pinyonscript/v17/6xKpdSJbL9-e9LuoeQiDRQR8WOXaOg.ttf',
-                    'Bilbo Swash Caps': 'https://fonts.gstatic.com/s/bilboswashcaps/v22/zrf-0GXbz-H3Wb4XBsGrTgq2PVmdqANJ.ttf'
+                    'Dancing Script': 'https://fonts.gstatic.com/s/dancingscript/v25/If2RXTr6YS-zF4S-kcSWSVi_szLgiuEHiC4W.ttf',
+                    'Great Vibes': 'https://fonts.gstatic.com/s/greatvibes/v18/RWmMoKWR9v4ksMfaWd_JN-XCg6UKDXlq.ttf',
+                    'Satisfy': 'https://fonts.gstatic.com/s/satisfy/v21/rP2Hp2yn6lkG50LoOZSCHBeHFl0.ttf',
+                    'Caveat': 'https://fonts.gstatic.com/s/caveat/v18/WnznHAc5bAfYB2QRah7pcpNvOx-pjfJ9eIWpYQ.ttf',
+                    'Homemade Apple': 'https://fonts.gstatic.com/s/homemadeapple/v22/Qw3EZQFXECDrI2q789EKQZJob3x0XHgOiJM6.ttf',
+                    'Sacramento': 'https://fonts.gstatic.com/s/sacramento/v15/buEzpo6gcdjy0EiZMBUG4C0f-w5KPio.ttf',
+                    'Allura': 'https://fonts.gstatic.com/s/allura/v21/9oRPNYsQpS4zjuAPjAIXPtrrGA.ttf',
+                    'Tangerine': 'https://fonts.gstatic.com/s/tangerine/v17/IurY6Y5j_oScZZow4VOBDpxNhLBQ4Q.ttf',
+                    'Petit Formal Script': 'https://fonts.gstatic.com/s/petitformalscript/v17/B50TF6xQr2TXJBnGOFME6u5OR83oRP5qoHnqP4gZSiE.ttf',
+                    'Alex Brush': 'https://fonts.gstatic.com/s/alexbrush/v22/SZc83FzrJKuqFbwMKk6EtULHoDw.ttf',
+                    'Pinyon Script': 'https://fonts.gstatic.com/s/pinyonscript/v21/6xKpdSJbL9-e9LuoeQiDRQR8aOLQO4bhiDY.ttf',
+                    'Bilbo Swash Caps': 'https://fonts.gstatic.com/s/bilboswashcaps/v24/zrf-0GXbz-H3Wb4XBsGrTgq2PVmdWjEPN_A.ttf'
                 };
 
-                // Get the font URL - use TTF format for better compatibility with PDF-Lib
-                const fontUrl = fontUrls[fontName] || fontUrls['Pacifico']; // Default to Pacifico if not found
+                const fontUrl = fontUrls[fontName];
 
-                console.log(`Loading font: ${fontName} from URL: ${fontUrl}`);
+                if (!fontUrl) {
+                    console.warn(`No URL found for font: ${fontName}`);
+                    return null;
+                }
+
+                console.log(`Loading font ${fontName} from: ${fontUrl}`);
 
                 // Fetch the font file
                 const response = await fetch(fontUrl);
 
                 if (!response.ok) {
+                    console.error(`Failed to fetch font ${fontName}: ${response.status} ${response.statusText}`);
                     throw new Error(`Failed to fetch font: ${response.status} ${response.statusText}`);
                 }
 
                 const fontBytes = await response.arrayBuffer();
+                console.log(`Font ${fontName} loaded successfully, size: ${fontBytes.byteLength} bytes`);
 
-                // Return the font data
                 // Cache the font data
                 const fontData = new Uint8Array(fontBytes);
                 window.fontCache[fontName] = fontData;
 
-                // Return the font data
                 return fontData;
             } catch (error) {
+                console.error(`Error loading font ${fontName}:`, error);
                 return null;
             }
         }
@@ -1252,13 +1257,6 @@
 
                     canvas.width = viewport.width * renderScale;
                     canvas.height = viewport.height * renderScale;
-
-                    console.log('PDF page dimensions:', {
-                        width: viewport.width,
-                        height: viewport.height,
-                        scale: scale,
-                        renderScale: renderScale
-                    });
 
                     const renderContext = {
                         canvasContext: context,
@@ -1313,16 +1311,11 @@
                                     font = await outputPdf.embedFont(PDFLib.StandardFonts.Helvetica);
                                 }
 
-                                // Draw the signature text
-                                console.log('Drawing signature at PDF coordinates:', {
-                                    originalX: sig.x,
-                                    originalY: sig.y,
-                                    viewportHeight: viewport.height,
-                                    convertedY: viewport.height - sig.y
-                                });
+                                // Draw the signature text centered at the stored coordinates
+                                const textWidth = font.widthOfTextAtSize(sig.text, sig.size);
                                 page.drawText(sig.text, {
-                                    x: sig.x,
-                                    y: sig.y,
+                                    x: sig.x - textWidth / 2,  // Center horizontally
+                                    y: sig.y - sig.size * 0.35, // Adjust for baseline (center vertically)
                                     size: sig.size,
                                     font,
                                     color: PDFLib.rgb(0, 0, 0)

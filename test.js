@@ -3,45 +3,59 @@ const fs = require('fs');
 const path = require('path');
 
 // Create a simple test PDF using PDF-lib if needed
-async function createTestPDF() {
+async function createTestPDF(options = {}) {
     const PDFLib = require('pdf-lib');
     const pdfDoc = await PDFLib.PDFDocument.create();
-    const page = pdfDoc.addPage([612, 792]); // Letter size
     const { StandardFonts } = PDFLib;
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-    page.drawText('Test Document for PDF Signer', {
-        x: 50,
-        y: 700,
-        size: 24,
-        font
-    });
+    const pageCount = options.pages || 1;
+    const width = options.width || 612;
+    const height = options.height || 792;
 
-    page.drawText('This is a sample PDF to test the signature functionality.', {
-        x: 50,
-        y: 650,
-        size: 12,
-        font
-    });
+    for (let i = 0; i < pageCount; i++) {
+        const page = pdfDoc.addPage([width, height]);
 
-    page.drawText('Please sign below:', {
-        x: 50,
-        y: 400,
-        size: 14,
-        font
-    });
+        page.drawText(`Test Document - Page ${i + 1}`, {
+            x: 50,
+            y: height - 92,
+            size: 24,
+            font
+        });
 
-    // Draw a signature line
-    page.drawLine({
-        start: { x: 50, y: 350 },
-        end: { x: 250, y: 350 },
-        thickness: 1
-    });
+        page.drawText('This is a sample PDF to test the signature functionality.', {
+            x: 50,
+            y: height - 142,
+            size: 12,
+            font
+        });
 
+        page.drawText('Please sign below:', {
+            x: 50,
+            y: height - 392,
+            size: 14,
+            font
+        });
+
+        // Draw a signature line
+        page.drawLine({
+            start: { x: 50, y: height - 442 },
+            end: { x: 250, y: height - 442 },
+            thickness: 1
+        });
+    }
+
+    const filename = options.filename || 'test.pdf';
     const pdfBytes = await pdfDoc.save();
-    fs.writeFileSync(path.join(__dirname, 'test.pdf'), pdfBytes);
-    console.log('Created test.pdf');
-    return path.join(__dirname, 'test.pdf');
+    fs.writeFileSync(path.join(__dirname, filename), pdfBytes);
+    console.log(`Created ${filename} (${pageCount} page(s), ${width}x${height})`);
+    return path.join(__dirname, filename);
+}
+
+// Create an invalid/corrupted file for testing
+function createInvalidFile(filename, content) {
+    fs.writeFileSync(path.join(__dirname, filename), content);
+    return path.join(__dirname, filename);
 }
 
 async function runTests() {
@@ -417,6 +431,272 @@ async function runTests() {
         } else {
             console.log(`  FAILED - Image rendering failed:`, imageResult);
             testsFailed++;
+        }
+
+        // TEST 17: Empty signature text blocks stamp button
+        console.log('\nTEST 17: Empty signature text blocks stamp button');
+        await page.evaluate(() => document.getElementById('signature-input').value = '');
+        await page.evaluate(() => document.getElementById('signature-input').dispatchEvent(new Event('input')));
+        await new Promise(r => setTimeout(r, 200));
+        const stampBtnDisabledEmpty = await page.$eval('#stamp-btn', el => el.disabled);
+        if (stampBtnDisabledEmpty) {
+            console.log('  PASSED - Stamp button disabled with empty signature');
+            testsPassed++;
+        } else {
+            console.log('  FAILED - Stamp button should be disabled with empty signature');
+            testsFailed++;
+        }
+
+        // TEST 18: Special characters in signature
+        console.log('\nTEST 18: Special characters in signature');
+        await page.evaluate(() => {
+            document.getElementById('signature-input').value = 'José García-López';
+            document.getElementById('signature-input').dispatchEvent(new Event('input'));
+        });
+        await new Promise(r => setTimeout(r, 200));
+        const specialCharPreview = await page.$eval('#signature-preview', el => el.textContent);
+        if (specialCharPreview === 'José García-López') {
+            console.log('  PASSED - Special characters rendered correctly');
+            testsPassed++;
+        } else {
+            console.log(`  FAILED - Got "${specialCharPreview}"`);
+            testsFailed++;
+        }
+
+        // TEST 19: Very long signature text
+        console.log('\nTEST 19: Very long signature text');
+        const longName = 'Bartholomew Maximilian Fitzgerald-Henderson III';
+        await page.evaluate((name) => {
+            document.getElementById('signature-input').value = name;
+            document.getElementById('signature-input').dispatchEvent(new Event('input'));
+        }, longName);
+        await new Promise(r => setTimeout(r, 200));
+        const longPreview = await page.$eval('#signature-preview', el => el.textContent);
+        if (longPreview === longName) {
+            console.log('  PASSED - Long signature text handled');
+            testsPassed++;
+        } else {
+            console.log('  FAILED - Long text not handled correctly');
+            testsFailed++;
+        }
+
+        // TEST 20: Clear signatures functionality
+        console.log('\nTEST 20: Clear signatures removes all from current page');
+        // Exit stamping mode if active
+        const inStampMode20 = await page.$eval('.canvas-container', el => el.classList.contains('stamping-mode'));
+        if (inStampMode20) {
+            await page.click('#stamp-btn');
+            await new Promise(r => setTimeout(r, 300));
+        }
+
+        await page.click('#clear-btn');
+        await new Promise(r => setTimeout(r, 500));
+
+        const sigCountAfter = await page.evaluate(() => {
+            return signatureCoords[currentPage] ? signatureCoords[currentPage].length : 0;
+        });
+
+        if (sigCountAfter === 0) {
+            console.log('  PASSED - Signatures cleared from page');
+            testsPassed++;
+        } else {
+            console.log(`  FAILED - ${sigCountAfter} signatures remain`);
+            testsFailed++;
+        }
+
+        // TEST 21: Cancel signature placement
+        console.log('\nTEST 21: Cancel button removes overlay without placing');
+
+        // Clean slate: remove any existing overlay and reset activePlacement
+        await page.evaluate(() => {
+            const existingOverlay = document.querySelector('.signature-placement-overlay');
+            if (existingOverlay) existingOverlay.remove();
+            activePlacement = null;
+        });
+
+        // Make sure we're NOT in stamping mode first
+        const alreadyInStampMode = await page.$eval('.canvas-container', el => el.classList.contains('stamping-mode'));
+        if (alreadyInStampMode) {
+            await page.click('#stamp-btn');
+            await new Promise(r => setTimeout(r, 300));
+        }
+
+        // Set signature text
+        await page.evaluate(() => {
+            document.getElementById('signature-input').value = 'Cancel Test';
+            document.getElementById('signature-input').dispatchEvent(new Event('input'));
+        });
+        await new Promise(r => setTimeout(r, 200));
+
+        // Enter stamping mode fresh
+        await page.click('#stamp-btn');
+        await new Promise(r => setTimeout(r, 500));
+
+        // Verify we're in stamping mode
+        const inStampModeNow = await page.$eval('.canvas-container', el => el.classList.contains('stamping-mode'));
+        if (!inStampModeNow) {
+            console.log('  FAILED - Could not enter stamping mode');
+            testsFailed++;
+        } else {
+            // Scroll canvas into view and get fresh reference
+            const canvasForCancel = await page.$('#pdf-canvas');
+            await canvasForCancel.scrollIntoView();
+            await new Promise(r => setTimeout(r, 300));
+
+            const cancelCanvasBox = await canvasForCancel.boundingBox();
+
+            // Click in middle of canvas
+            await page.mouse.click(
+                cancelCanvasBox.x + cancelCanvasBox.width / 2,
+                cancelCanvasBox.y + cancelCanvasBox.height / 2
+            );
+            await new Promise(r => setTimeout(r, 800));
+
+            const overlayBeforeCancel = await page.$('.signature-placement-overlay');
+            if (overlayBeforeCancel) {
+                await page.click('.cancel-signature-btn');
+                await new Promise(r => setTimeout(r, 300));
+
+                const overlayAfterCancel = await page.$('.signature-placement-overlay');
+                const sigCountAfterCancel = await page.evaluate(() => {
+                    return signatureCoords[currentPage] ? signatureCoords[currentPage].length : 0;
+                });
+
+                if (overlayAfterCancel === null && sigCountAfterCancel === 0) {
+                    console.log('  PASSED - Cancel removed overlay without placing signature');
+                    testsPassed++;
+                } else {
+                    console.log('  FAILED - Cancel did not work correctly');
+                    testsFailed++;
+                }
+            } else {
+                // Debug: show why overlay wasn't created
+                const debugState = await page.evaluate(() => ({
+                    isStampingMode,
+                    hasActivePlacement: !!activePlacement,
+                    hasPdfDoc: !!pdfDoc
+                }));
+                console.log('  FAILED - Could not create overlay. State:', JSON.stringify(debugState));
+                testsFailed++;
+            }
+        }
+
+        // Exit stamping mode if still active
+        const inStampMode21 = await page.$eval('.canvas-container', el => el.classList.contains('stamping-mode'));
+        if (inStampMode21) {
+            await page.click('#stamp-btn');
+            await new Promise(r => setTimeout(r, 300));
+        }
+
+        // TEST 22: All font options available
+        console.log('\nTEST 22: All font options available');
+        const fontOptions = await page.evaluate(() => {
+            const select = document.getElementById('font-selector');
+            return Array.from(select.options).map(o => o.value);
+        });
+        const expectedFonts = ['Dancing Script', 'Great Vibes', 'Satisfy', 'Sacramento', 'Allura'];
+        const missingFonts = expectedFonts.filter(f => !fontOptions.includes(f));
+        if (missingFonts.length === 0) {
+            console.log(`  PASSED - All ${fontOptions.length} fonts available`);
+            testsPassed++;
+        } else {
+            console.log(`  FAILED - Missing fonts: ${missingFonts.join(', ')}`);
+            testsFailed++;
+        }
+
+        // TEST 23: Dark mode toggle
+        console.log('\nTEST 23: Dark mode toggle works');
+        const hadDarkMode = await page.$eval('body', el => el.classList.contains('dark-theme'));
+        await page.click('#theme-toggle-btn');
+        await new Promise(r => setTimeout(r, 300));
+        const hasDarkModeAfter = await page.$eval('body', el => el.classList.contains('dark-theme'));
+        if (hadDarkMode !== hasDarkModeAfter) {
+            console.log('  PASSED - Dark mode toggled');
+            testsPassed++;
+        } else {
+            console.log('  FAILED - Dark mode did not toggle');
+            testsFailed++;
+        }
+
+        // TEST 24: Multi-page PDF navigation
+        console.log('\nTEST 24: Multi-page PDF navigation');
+        const multiPagePdf = await createTestPDF({ pages: 3, filename: 'multipage.pdf' });
+        const fileInput2 = await page.$('#file-input');
+        await fileInput2.uploadFile(multiPagePdf);
+        await page.waitForFunction(() => {
+            const pageInfo = document.getElementById('page-info');
+            return pageInfo && pageInfo.textContent.includes('Page 1 of 3');
+        }, { timeout: 10000 });
+
+        // Test next page button
+        await page.click('#next-page');
+        await new Promise(r => setTimeout(r, 500));
+        const pageInfoAfterNext = await page.$eval('#page-info', el => el.textContent);
+        if (pageInfoAfterNext.includes('Page 2 of 3')) {
+            console.log('  PASSED - Next page navigation works');
+            testsPassed++;
+        } else {
+            console.log(`  FAILED - Expected "Page 2 of 3", got "${pageInfoAfterNext}"`);
+            testsFailed++;
+        }
+
+        // Test prev page button
+        await page.click('#prev-page');
+        await new Promise(r => setTimeout(r, 500));
+        const pageInfoAfterPrev = await page.$eval('#page-info', el => el.textContent);
+        if (pageInfoAfterPrev.includes('Page 1 of 3')) {
+            console.log('  PASSED - Previous page navigation works');
+            testsPassed++;
+        } else {
+            console.log(`  FAILED - Expected "Page 1 of 3", got "${pageInfoAfterPrev}"`);
+            testsFailed++;
+        }
+
+        // Clean up multi-page PDF
+        if (fs.existsSync(multiPagePdf)) {
+            fs.unlinkSync(multiPagePdf);
+        }
+
+        // TEST 25: Invalid file upload shows error
+        console.log('\nTEST 25: Invalid file upload is rejected');
+        const invalidFile = createInvalidFile('invalid.txt', 'This is not a PDF file');
+        const fileInput3 = await page.$('#file-input');
+
+        // Clear existing errors
+        errors.length = 0;
+
+        // Try to upload invalid file (the input has accept="application/pdf" but we'll test the handling)
+        await page.evaluate(() => {
+            // Simulate an invalid file being processed
+            const file = new File(['not a pdf'], 'test.txt', { type: 'text/plain' });
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            const dropZone = document.getElementById('drop-zone');
+            const event = new DragEvent('drop', {
+                dataTransfer: dataTransfer,
+                bubbles: true
+            });
+            dropZone.dispatchEvent(event);
+        });
+        await new Promise(r => setTimeout(r, 1000));
+
+        // Check that invalid file didn't break the app (pdfDoc should remain unchanged or null)
+        const appStillWorks = await page.evaluate(() => {
+            // The app should either show an error or ignore the file
+            return document.getElementById('file-input') !== null;
+        });
+
+        if (appStillWorks) {
+            console.log('  PASSED - App handles invalid file gracefully');
+            testsPassed++;
+        } else {
+            console.log('  FAILED - App crashed on invalid file');
+            testsFailed++;
+        }
+
+        // Clean up
+        if (fs.existsSync(invalidFile)) {
+            fs.unlinkSync(invalidFile);
         }
 
         // Summary

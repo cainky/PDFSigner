@@ -444,6 +444,379 @@
             font-size: 12px;
             cursor: pointer;
         }
+
+        /* Stepper Styles */
+        .stepper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 1.5rem 0;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            color: var(--gray);
+            transition: all 0.3s ease;
+        }
+
+        .step.active {
+            color: var(--primary);
+        }
+
+        .step.active .step-number {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .step.completed {
+            color: var(--success);
+        }
+
+        .step.completed .step-number {
+            background: var(--success);
+            color: white;
+            border-color: var(--success);
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 0.5rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .step-label {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .step-connector {
+            width: 40px;
+            height: 2px;
+            background: var(--gray);
+            margin: 0 0.75rem;
+            transition: background 0.3s ease;
+        }
+
+        .step.completed + .step-connector {
+            background: var(--success);
+        }
+
+        /* Sidebar and Layout */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .main-content {
+            width: 100%;
+        }
+
+        @media (min-width: 1024px) {
+            .container {
+                max-width: 1400px;
+                display: grid;
+                grid-template-columns: 340px 1fr;
+                grid-template-rows: auto 1fr;
+                gap: 1.5rem;
+                align-items: start;
+            }
+
+            header {
+                grid-column: 1 / -1;
+            }
+
+            .theme-toggle {
+                position: fixed;
+                right: 20px;
+                top: 20px;
+            }
+
+            .sidebar {
+                position: sticky;
+                top: 20px;
+            }
+
+            .main-content {
+                min-height: 600px;
+            }
+        }
+
+        /* Drop Zone */
+        .drop-zone {
+            border: 2px dashed var(--gray);
+            border-radius: var(--radius);
+            padding: 2rem 1rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .drop-zone:hover {
+            border-color: var(--primary);
+            background: rgba(66, 133, 244, 0.05);
+        }
+
+        .drop-zone.drag-over {
+            border-color: var(--primary);
+            background: rgba(66, 133, 244, 0.1);
+            transform: scale(1.02);
+        }
+
+        .drop-zone-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .drop-icon {
+            width: 48px;
+            height: 48px;
+            color: var(--gray);
+            transition: color 0.3s ease;
+        }
+
+        .drop-zone:hover .drop-icon,
+        .drop-zone.drag-over .drop-icon {
+            color: var(--primary);
+        }
+
+        .drop-text {
+            font-weight: 600;
+            color: var(--dark);
+            margin: 0;
+        }
+
+        .drop-subtext {
+            color: var(--gray);
+            font-size: 0.85rem;
+            margin: 0;
+        }
+
+        .drop-zone .file-input-label {
+            display: inline-flex;
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+            border: none;
+            background: var(--primary);
+            color: white;
+            cursor: pointer;
+        }
+
+        .drop-zone .file-input-label:hover {
+            background: var(--primary-dark);
+        }
+
+        /* File Name Display */
+        .file-name {
+            margin-top: 0.75rem;
+            padding: 0.5rem 0.75rem;
+            background: rgba(15, 157, 88, 0.1);
+            border-radius: var(--radius);
+            color: var(--success);
+            font-size: 0.85rem;
+            font-weight: 500;
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .file-name.show {
+            display: flex;
+        }
+
+        .file-name::before {
+            content: "✓";
+            font-weight: bold;
+        }
+
+        /* Signature Panel Improvements */
+        #signature-panel input[type="text"],
+        #signature-panel select {
+            width: 100%;
+            margin-bottom: 0.75rem;
+        }
+
+        .signature-preview-wrapper {
+            position: relative;
+            margin: 1rem 0;
+        }
+
+        #signature-preview {
+            background: linear-gradient(45deg, #f8f9fa 25%, transparent 25%),
+                        linear-gradient(-45deg, #f8f9fa 25%, transparent 25%),
+                        linear-gradient(45deg, transparent 75%, #f8f9fa 75%),
+                        linear-gradient(-45deg, transparent 75%, #f8f9fa 75%);
+            background-size: 10px 10px;
+            background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+        }
+
+        .font-label {
+            display: block;
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--gray);
+            margin-top: 0.5rem;
+        }
+
+        /* Button Row */
+        .button-row {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .button-row button {
+            flex: 1;
+        }
+
+        /* Save Button Large */
+        .save-btn-large {
+            width: 100%;
+            padding: 1rem 1.5rem;
+            font-size: 1rem;
+            background: var(--success);
+        }
+
+        .save-btn-large:hover:not(:disabled) {
+            background: var(--success-dark);
+        }
+
+        .save-btn-large:disabled {
+            background: var(--gray);
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Empty State */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 4rem 2rem;
+            text-align: center;
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            min-height: 400px;
+        }
+
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            color: var(--gray);
+            margin-bottom: 1.5rem;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .empty-state p {
+            color: var(--gray);
+            font-size: 0.95rem;
+        }
+
+        .empty-state.hidden {
+            display: none;
+        }
+
+        #pdf-canvas.hidden {
+            display: none;
+        }
+
+        /* Page controls improvements */
+        .page-controls {
+            opacity: 0.5;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .page-controls.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Dark theme additions */
+        body.dark-theme .drop-zone {
+            border-color: var(--dark-border);
+        }
+
+        body.dark-theme .drop-zone:hover,
+        body.dark-theme .drop-zone.drag-over {
+            border-color: var(--primary);
+            background: rgba(66, 133, 244, 0.1);
+        }
+
+        body.dark-theme .drop-text {
+            color: var(--dark-text);
+        }
+
+        body.dark-theme .empty-state {
+            background: var(--dark-panel);
+        }
+
+        body.dark-theme .empty-state h3 {
+            color: var(--dark-text);
+        }
+
+        body.dark-theme .step-label,
+        body.dark-theme .drop-text {
+            color: var(--dark-text);
+        }
+
+        body.dark-theme .file-name {
+            background: rgba(15, 157, 88, 0.2);
+        }
+
+        /* Transitions for polish */
+        .panel {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .panel:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        /* Responsive stepper */
+        @media (max-width: 600px) {
+            .step-label {
+                display: none;
+            }
+
+            .step-connector {
+                width: 20px;
+            }
+        }
     </style>
 </head>
 
@@ -452,6 +825,22 @@
         <header>
             <h1>Simple PDF Signer ✍️</h1>
             <p class="subtitle">Add your signature to any PDF document</p>
+            <div class="stepper">
+                <div class="step active" data-step="1">
+                    <div class="step-number">1</div>
+                    <span class="step-label">Upload PDF</span>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step" data-step="2">
+                    <div class="step-number">2</div>
+                    <span class="step-label">Create Signature</span>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step" data-step="3">
+                    <div class="step-number">3</div>
+                    <span class="step-label">Place & Save</span>
+                </div>
+            </div>
         </header>
         <div class="theme-toggle">
             <button id="theme-toggle-btn" aria-label="Toggle dark mode">
@@ -474,113 +863,130 @@
                 </svg>
             </button>
         </div>
-        <div class="panel" id="upload-panel">
-            <div class="panel-title">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="12" y1="18" x2="12" y2="12"></line>
-                    <line x1="9" y1="15" x2="15" y2="15"></line>
-                </svg>
-                PDF Document
-            </div>
-            <div class="row">
-                <div class="file-input-wrapper">
-                    <label for="file-input" class="file-input-label">
+
+        <aside class="sidebar">
+            <div class="panel" id="upload-panel">
+                <div class="panel-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="12" y1="18" x2="12" y2="12"></line>
+                        <line x1="9" y1="15" x2="15" y2="15"></line>
+                    </svg>
+                    Upload PDF
+                </div>
+                <div class="drop-zone" id="drop-zone">
+                    <div class="drop-zone-content">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="drop-icon">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
-                        Choose PDF File
-                    </label>
+                        <p class="drop-text">Drag & drop PDF here</p>
+                        <p class="drop-subtext">or</p>
+                        <label for="file-input" class="file-input-label">
+                            Choose File
+                        </label>
+                    </div>
                     <input type="file" id="file-input" accept="application/pdf">
                 </div>
-                <button id="save-btn" disabled>
+                <div class="file-name" id="file-name"></div>
+            </div>
+
+            <div class="panel" id="signature-panel">
+                <div class="panel-title">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                        <polyline points="7 3 7 8 15 8"></polyline>
+                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
                     </svg>
-                    Save PDF
-                </button>
-            </div>
-        </div>
-
-        <div class="panel" id="signature-panel">
-            <div class="panel-title">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <path d="M14 2v6h6"></path>
-                    <path d="M8 13h2"></path>
-                    <path d="M8 17h6"></path>
-                </svg>
-                Signature Style
-            </div>
-            <div class="row">
-                <input type="text" id="signature-input" placeholder="Type your signature here"
+                    Create Signature
+                </div>
+                <input type="text" id="signature-input" placeholder="Type your name here..."
                     aria-label="Signature text">
                 <select id="font-selector" aria-label="Font style">
-                    <option value="Dancing Script" style="font-family: 'Dancing Script'">Dancing Script</option>
-                    <option value="Great Vibes" style="font-family: 'Great Vibes'">Great Vibes</option>
-                    <option value="Satisfy" style="font-family: 'Satisfy'">Satisfy</option>
-                    <option value="Homemade Apple" style="font-family: 'Homemade Apple'">Homemade Apple</option>
-                    <option value="Sacramento" style="font-family: 'Sacramento'">Sacramento</option>
-                    <option value="Allura" style="font-family: 'Allura'">Allura</option>
-                    <option value="Tangerine" style="font-family: 'Tangerine'">Tangerine</option>
-                    <option value="Petit Formal Script" style="font-family: 'Petit Formal Script'">Petit Formal Script
-                    </option>
-                    <option value="Alex Brush" style="font-family: 'Alex Brush'">Alex Brush</option>
-                    <option value="Pinyon Script" style="font-family: 'Pinyon Script'">Pinyon Script</option>
-                    <option value="Bilbo Swash Caps" style="font-family: 'Bilbo Swash Caps'">Bilbo Swash Caps</option>
+                    <option value="Dancing Script">Dancing Script</option>
+                    <option value="Great Vibes">Great Vibes</option>
+                    <option value="Satisfy">Satisfy</option>
+                    <option value="Homemade Apple">Homemade Apple</option>
+                    <option value="Sacramento" selected>Sacramento</option>
+                    <option value="Allura">Allura</option>
+                    <option value="Tangerine">Tangerine</option>
+                    <option value="Petit Formal Script">Petit Formal Script</option>
+                    <option value="Alex Brush">Alex Brush</option>
+                    <option value="Pinyon Script">Pinyon Script</option>
+                    <option value="Bilbo Swash Caps">Bilbo Swash Caps</option>
                 </select>
+                <div class="signature-preview-wrapper">
+                    <div id="signature-preview">Your Signature</div>
+                    <span class="font-label" id="font-label">Sacramento</span>
+                </div>
+                <div class="button-row">
+                    <button id="stamp-btn" class="success" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                        Place Signature
+                    </button>
+                    <button id="clear-btn" class="danger" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 6h18"></path>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                        Clear
+                    </button>
+                </div>
             </div>
-            <div id="signature-preview">Your Signature</div>
-            <div class="row">
-                <button id="stamp-btn" class="success" disabled>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                    </svg>
-                    Place Signature
-                </button>
-                <button id="clear-btn" class="danger" disabled>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 6h18"></path>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                    Clear Signatures
-                </button>
-            </div>
-        </div>
 
-        <div class="page-controls">
-            <button id="prev-page" disabled>
+            <button id="save-btn" class="save-btn-large" disabled>
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="15 18 9 12 15 6"></polyline>
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                    <polyline points="7 3 7 8 15 8"></polyline>
                 </svg>
-                Previous
+                Save Signed PDF
             </button>
-            <span id="page-info">No document loaded</span>
-            <button id="next-page" disabled>
-                Next
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                </svg>
-            </button>
-        </div>
+        </aside>
 
-        <div class="canvas-container">
-            <canvas id="pdf-canvas"></canvas>
-            <div class="cursor-stamp" id="cursor-stamp">🖋️</div>
-        </div>
+        <main class="main-content">
+            <div class="page-controls">
+                <button id="prev-page" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    Previous
+                </button>
+                <span id="page-info">No document loaded</span>
+                <button id="next-page" disabled>
+                    Next
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="canvas-container">
+                <div class="empty-state" id="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="12" y1="18" x2="12" y2="12"></line>
+                        <line x1="9" y1="15" x2="15" y2="15"></line>
+                    </svg>
+                    <h3>No PDF loaded</h3>
+                    <p>Upload a PDF document to get started</p>
+                </div>
+                <canvas id="pdf-canvas"></canvas>
+                <div class="cursor-stamp" id="cursor-stamp">🖋️</div>
+            </div>
+        </main>
     </div>
 
     <div class="status-message" id="status-message"></div>
@@ -604,6 +1010,11 @@
         const nextPageBtn = document.getElementById('next-page');
         const pageInfo = document.getElementById('page-info');
         const statusMessage = document.getElementById('status-message');
+        const dropZone = document.getElementById('drop-zone');
+        const fileNameDisplay = document.getElementById('file-name');
+        const emptyState = document.getElementById('empty-state');
+        const fontLabel = document.getElementById('font-label');
+        const pageControls = document.querySelector('.page-controls');
 
         // App state
         let pdfDoc = null;
@@ -681,7 +1092,120 @@
                 prevPageBtn.disabled = currentPage <= 1;
                 nextPageBtn.disabled = currentPage >= totalPages;
             }
+
+            // Update page controls visibility
+            if (pageControls) {
+                pageControls.classList.toggle('active', documentLoaded);
+            }
         }
+
+        // Update stepper based on current state
+        function updateStepper() {
+            const steps = document.querySelectorAll('.step');
+            const connectors = document.querySelectorAll('.step-connector');
+
+            const hasPdf = pdfDoc !== null;
+            const hasSignature = signatureInput.value.trim().length > 0;
+            const hasPlacedSignatures = Object.values(signatureCoords).some(arr => arr.length > 0);
+
+            // Step 1: Upload PDF
+            steps[0].classList.remove('active', 'completed');
+            if (hasPdf) {
+                steps[0].classList.add('completed');
+            } else {
+                steps[0].classList.add('active');
+            }
+
+            // Step 2: Create Signature
+            steps[1].classList.remove('active', 'completed');
+            if (hasPdf && hasSignature) {
+                steps[1].classList.add('completed');
+            } else if (hasPdf) {
+                steps[1].classList.add('active');
+            }
+
+            // Step 3: Place & Save
+            steps[2].classList.remove('active', 'completed');
+            if (hasPdf && hasSignature && hasPlacedSignatures) {
+                steps[2].classList.add('completed');
+            } else if (hasPdf && hasSignature) {
+                steps[2].classList.add('active');
+            }
+
+            // Update connectors
+            if (connectors[0]) {
+                connectors[0].style.background = hasPdf ? 'var(--success)' : 'var(--gray)';
+            }
+            if (connectors[1]) {
+                connectors[1].style.background = (hasPdf && hasSignature) ? 'var(--success)' : 'var(--gray)';
+            }
+        }
+
+        // Update empty state and canvas visibility
+        function updateEmptyState(documentLoaded) {
+            if (emptyState) {
+                emptyState.classList.toggle('hidden', documentLoaded);
+            }
+            pdfCanvas.classList.toggle('hidden', !documentLoaded);
+        }
+
+        // Update file name display
+        function updateFileName(fileName) {
+            if (fileNameDisplay) {
+                if (fileName) {
+                    fileNameDisplay.textContent = fileName;
+                    fileNameDisplay.classList.add('show');
+                } else {
+                    fileNameDisplay.classList.remove('show');
+                }
+            }
+        }
+
+        // Update font label
+        function updateFontLabel() {
+            if (fontLabel) {
+                fontLabel.textContent = fontSelector.value;
+            }
+        }
+
+        // Drag and drop handlers
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('drag-over');
+        });
+
+        dropZone.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('drag-over');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type === 'application/pdf') {
+                    updateFileName(file.name);
+                    await loadPdf(file);
+                } else {
+                    showStatus('Please drop a PDF file', 3000);
+                }
+            }
+        });
+
+        // Allow clicking anywhere in drop zone to trigger file input
+        dropZone.addEventListener('click', (e) => {
+            if (e.target === dropZone || e.target.closest('.drop-zone-content')) {
+                if (!e.target.closest('.file-input-label')) {
+                    fileInput.click();
+                }
+            }
+        });
 
         // Update signature preview when text or font changes
         function updateSignaturePreview() {
@@ -733,6 +1257,8 @@
                     pdfLibDoc = pdfJsDoc;
                     renderPage(currentPage);
                     updateButtonStates(true);
+                    updateEmptyState(true);
+                    updateStepper();
                     showStatus('Document prepared for signing', 3000);
                 } catch (e) {
                     console.error('Error with PDF-Lib:', e);
@@ -860,12 +1386,17 @@
             if (pdfDoc) {
                 stampBtn.disabled = !signatureInput.value.trim();
             }
+            updateStepper();
         });
-        fontSelector.addEventListener('change', updateSignaturePreview);
+        fontSelector.addEventListener('change', () => {
+            updateSignaturePreview();
+            updateFontLabel();
+        });
 
         fileInput.addEventListener('change', async e => {
             const file = e.target.files[0];
             if (!file) return;
+            updateFileName(file.name);
             await loadPdf(file);
         });
 
@@ -1034,6 +1565,7 @@
                 document.querySelector('.canvas-container').removeChild(overlay);
                 activePlacement = null;
                 await drawStamps();
+                updateStepper();
                 showStatus('Signature placed!');
             });
 
@@ -1147,6 +1679,7 @@
             if (signatureCoords[currentPage] && signatureCoords[currentPage].length > 0) {
                 signatureCoords[currentPage] = [];
                 renderPage(currentPage);
+                updateStepper();
                 showStatus('Signatures cleared from this page');
             } else {
                 showStatus('No signatures to clear on this page');
@@ -1366,6 +1899,9 @@
         // Initialize signature preview and button states
         updateSignaturePreview();
         updateButtonStates(false);
+        updateEmptyState(false);
+        updateFontLabel();
+        updateStepper();
     </script>
 </body>
 

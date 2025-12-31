@@ -961,9 +961,9 @@
             const overlay = document.createElement('div');
             overlay.className = 'signature-placement-overlay';
 
-            // Position exactly where clicked - no offsets
-            overlay.style.left = `${x}px`;
-            overlay.style.top = `${y}px`;
+            // CENTER the overlay on click point (not top-left at click)
+            overlay.style.left = `${x - initialSize.width / 2}px`;
+            overlay.style.top = `${y - initialSize.height / 2}px`;
             overlay.style.transform = 'none';
 
             overlay.style.width = `${initialSize.width}px`;
@@ -1229,6 +1229,39 @@
             };
         }
 
+        // Render signature text to a canvas and return image data
+        async function renderSignatureToImage(text, fontFamily, fontSize) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // Use 2x resolution for crisp rendering
+            const scale = 2;
+            const scaledFontSize = fontSize * scale;
+
+            // Set font and measure text
+            ctx.font = `${scaledFontSize}px '${fontFamily}'`;
+            const metrics = ctx.measureText(text);
+
+            // Size canvas to fit text with padding
+            const padding = 10 * scale;
+            canvas.width = Math.ceil(metrics.width) + padding * 2;
+            canvas.height = Math.ceil(scaledFontSize * 1.5) + padding * 2;
+
+            // Clear and render text (must set font again after resize)
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = `${scaledFontSize}px '${fontFamily}'`;
+            ctx.fillStyle = 'black';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, padding, canvas.height / 2);
+
+            // Return PNG data URL and dimensions
+            return {
+                dataUrl: canvas.toDataURL('image/png'),
+                width: canvas.width / scale,
+                height: canvas.height / scale
+            };
+        }
+
         // Replace the saveBtn event listener with this version
         saveBtn.addEventListener('click', async () => {
             if (!pdfDoc || !pdfLibDoc) {
@@ -1289,36 +1322,19 @@
                     if (signatureCoords[pageNum]) {
                         for (const sig of signatureCoords[pageNum]) {
                             try {
-                                let fontFamily = sig.font || 'Helvetica';
-                                let font;
+                                // Render signature as image (guarantees font appears correctly)
+                                const sigImage = await renderSignatureToImage(sig.text, sig.font, sig.size);
 
-                                // Load and embed the custom font
-                                try {
-                                    // Get the font data from the function we already have
-                                    const fontData = await getFontData(fontFamily);
-                                    if (fontData) {
-                                        // Embed the custom font
-                                        font = await outputPdf.embedFont(fontData);
-                                    } else {
-                                        // Fallback if font data couldn't be loaded
-                                        console.warn(
-                                            `Couldn't load font: ${fontFamily}, falling back to Helvetica`
-                                        );
-                                        font = await outputPdf.embedFont(PDFLib.StandardFonts.Helvetica);
-                                    }
-                                } catch (e) {
-                                    console.error('Error embedding font:', e);
-                                    font = await outputPdf.embedFont(PDFLib.StandardFonts.Helvetica);
-                                }
+                                // Fetch and embed the PNG image
+                                const imgBytes = await fetch(sigImage.dataUrl).then(res => res.arrayBuffer());
+                                const pngImage = await outputPdf.embedPng(imgBytes);
 
-                                // Draw the signature text centered at the stored coordinates
-                                const textWidth = font.widthOfTextAtSize(sig.text, sig.size);
-                                page.drawText(sig.text, {
-                                    x: sig.x - textWidth / 2,  // Center horizontally
-                                    y: sig.y - sig.size * 0.35, // Adjust for baseline (center vertically)
-                                    size: sig.size,
-                                    font,
-                                    color: PDFLib.rgb(0, 0, 0)
+                                // Draw centered at the stored coordinates
+                                page.drawImage(pngImage, {
+                                    x: sig.x - sigImage.width / 2,
+                                    y: sig.y - sigImage.height / 2,
+                                    width: sigImage.width,
+                                    height: sigImage.height
                                 });
 
                             } catch (e) {

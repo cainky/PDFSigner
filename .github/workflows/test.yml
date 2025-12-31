@@ -1,0 +1,41 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Start server and run tests
+        run: |
+          # Start HTTP server in background
+          python3 -m http.server 8765 &
+          SERVER_PID=$!
+
+          # Wait for server to be ready
+          sleep 2
+
+          # Run tests
+          npm test
+          TEST_EXIT_CODE=$?
+
+          # Stop server
+          kill $SERVER_PID 2>/dev/null || true
+
+          exit $TEST_EXIT_CODE

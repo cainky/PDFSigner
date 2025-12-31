@@ -319,7 +319,104 @@ async function runTests() {
 
         // Cleanup downloads folder
         if (fs.existsSync(downloadPath)) {
-            fs.rmdirSync(downloadPath, { recursive: true });
+            fs.rmSync(downloadPath, { recursive: true });
+        }
+
+        // TEST 14: Overlay centers on click point
+        console.log('\nTEST 14: Overlay centers on click point');
+
+        // Exit stamping mode if active, then re-enter fresh
+        const wasInStampingMode = await page.$eval('.canvas-container', el => el.classList.contains('stamping-mode'));
+        if (wasInStampingMode) {
+            await page.click('#stamp-btn'); // Exit
+            await new Promise(r => setTimeout(r, 300));
+        }
+        await page.click('#stamp-btn'); // Enter fresh
+        await new Promise(r => setTimeout(r, 500));
+
+        // Re-query canvas element (previous reference may be stale)
+        const canvas2 = await page.$('#pdf-canvas');
+        await canvas2.scrollIntoView();
+        await new Promise(r => setTimeout(r, 300));
+
+        const canvasBox2 = await canvas2.boundingBox();
+        const clickX = canvasBox2.x + 300;
+        const clickY = canvasBox2.y + 200;
+
+        await page.mouse.click(clickX, clickY);
+        await new Promise(r => setTimeout(r, 500));
+
+        const overlayPosition = await page.evaluate(() => {
+            const overlay = document.querySelector('.signature-placement-overlay');
+            if (!overlay) return null;
+            const rect = overlay.getBoundingClientRect();
+            return {
+                left: rect.left,
+                top: rect.top,
+                width: rect.width,
+                height: rect.height,
+                centerX: rect.left + rect.width / 2,
+                centerY: rect.top + rect.height / 2
+            };
+        });
+
+        if (overlayPosition) {
+            // Check if overlay center is close to click point (within 5px tolerance)
+            const centerDiffX = Math.abs(overlayPosition.centerX - clickX);
+            const centerDiffY = Math.abs(overlayPosition.centerY - clickY);
+
+            if (centerDiffX < 5 && centerDiffY < 5) {
+                console.log(`  PASSED - Overlay centered on click (diff: ${centerDiffX.toFixed(1)}px, ${centerDiffY.toFixed(1)}px)`);
+                testsPassed++;
+            } else {
+                console.log(`  FAILED - Overlay not centered (diff: ${centerDiffX.toFixed(1)}px, ${centerDiffY.toFixed(1)}px)`);
+                testsFailed++;
+            }
+
+            // Cancel this placement for next test
+            const cancelBtn = await page.$('.cancel-signature-btn');
+            if (cancelBtn) await cancelBtn.click();
+            await new Promise(r => setTimeout(r, 300));
+        } else {
+            console.log('  FAILED - No overlay created for centering test');
+            testsFailed++;
+        }
+
+        // TEST 15: Signature renders with correct font
+        console.log('\nTEST 15: Signature image rendering function exists');
+        const hasRenderFunction = await page.evaluate(() => {
+            return typeof renderSignatureToImage === 'function';
+        });
+
+        if (hasRenderFunction) {
+            console.log('  PASSED - renderSignatureToImage function exists');
+            testsPassed++;
+        } else {
+            console.log('  FAILED - renderSignatureToImage function not found');
+            testsFailed++;
+        }
+
+        // TEST 16: Signature image rendering produces valid output
+        console.log('\nTEST 16: Signature image rendering produces valid PNG');
+        const imageResult = await page.evaluate(async () => {
+            try {
+                const result = await renderSignatureToImage('Test Signature', 'Sacramento', 24);
+                return {
+                    hasDataUrl: result.dataUrl && result.dataUrl.startsWith('data:image/png'),
+                    width: result.width,
+                    height: result.height
+                };
+            } catch (e) {
+                return { error: e.message };
+            }
+        });
+
+        if (imageResult.hasDataUrl && imageResult.width > 0 && imageResult.height > 0) {
+            console.log(`  PASSED - PNG generated (${imageResult.width}x${imageResult.height})`);
+            testsPassed++;
+        } else {
+            console.log(`  FAILED - Image rendering failed:`, imageResult);
+            testsFailed++;
         }
 
         // Summary

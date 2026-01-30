@@ -1271,14 +1271,22 @@
                 try {
                     const loadingTask = pdfjsLib.getDocument({
                         data: originalPdfBytes,
-                        nativeImageDecoderSupport: 'display'
+                        enableXfa: true,  // Enable XFA form support for government forms
+                        isEvalSupported: false,  // Security: disable eval
+                        useSystemFonts: true  // Better font rendering
                     });
                     pdfDoc = await loadingTask.promise;
                     totalPages = pdfDoc.numPages;
                     currentPage = 1;
                 } catch (e) {
                     console.error("PDF.js loading error:", e);
-                    showStatus('Error: Could not load the PDF for viewing.', 5000);
+                    let errorMsg = 'Error: Could not load the PDF for viewing.';
+                    if (e.message && e.message.includes('password')) {
+                        errorMsg = 'Error: This PDF is password-protected. Please unlock it first.';
+                    } else if (e.message && e.message.includes('XFA')) {
+                        errorMsg = 'Error: This PDF uses XFA forms which are not fully supported.';
+                    }
+                    showStatus(errorMsg, 5000);
                     return;
                 }
 
@@ -1306,7 +1314,13 @@
                     updateButtonStates(true);
                     updateEmptyState(true);
                     updateStepper();
-                    showStatus('Document prepared for signing', 3000);
+
+                    // Check for XFA forms and warn user
+                    if (pdfDoc._pdfInfo && pdfDoc._pdfInfo.IsXFAPresent) {
+                        showStatus('XFA form detected - some fields may not display correctly', 4000);
+                    } else {
+                        showStatus('Document prepared for signing', 3000);
+                    }
                 } catch (e) {
                     console.error('Error with PDF-Lib:', e);
                     showStatus('Error: Could not prepare the PDF for editing.', 5000);
